@@ -10,6 +10,19 @@ let
 in
 {
   unit = impurifier.unit;
+  slackpkg-vm = import ./frontend-vm.nix {
+    inherit pkgs impurifier;
+    frontend = "slackpkg";
+  };
+  slapt-get-vm = import ./frontend-vm.nix {
+    inherit pkgs impurifier;
+    frontend = "slapt-get";
+  };
+  sbopkg-vm = import ./frontend-vm.nix {
+    inherit pkgs impurifier;
+    frontend = "sbopkg";
+  };
+  netpkg-vm = import ./frontend-vm.nix { inherit pkgs impurifier; };
   emitter =
     pkgs.runCommand "pkgtools-contract"
       {

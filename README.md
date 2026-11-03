@@ -42,11 +42,24 @@ exist: cooperating native driver scripts call
 `/usr/sbin/pkgtools-impurifier-activate`, or operators reconcile explicitly.
 `makeSlackBuild { package = artifact; }` emits a portable source bundle whose
 SlackBuild repacks the prebuilt payload using native makepkg. It does not rebuild
-the application outside Nix. `OUTPUT` selects the archive destination.
+the application outside Nix. `OUTPUT` selects the archive destination. It also
+emits `<name>.SlackBuild`, `<name>.info`, README and slack-desc for a local
+sbopkg repository. The bundled payload is verified by SHA256 before extraction;
+`.info` lists advisory dependency names from the native package.
 
 `buildPackage` accepts a raw payload, script bodies and advisory dependencies;
 it does not automatically activate raw packages.
 
-`nix flake check -L` uses actual pinned Slackware pkgtools scripts inside a
-QEMU NixOS VM. This tests native archive inventory and transactions; it does
-not establish a full Slackware boot or repository frontend compatibility.
+`makeRepository { packages = [ runtime app ]; }` emits a Slackware repository
+with PACKAGES.TXT, FILELIST.TXT, MANIFEST.bz2 and CHECKSUMS.md5. Its optional
+`timestamp` defaults to the adapter source timestamp and controls FILELIST's
+publication date. Copy the output to a writable publication directory, then run
+`./sign-repository --local-user <key-id>` there with your existing GPG keyring.
+The helper signs each `.txz`, includes those signatures in CHECKSUMS.md5, then
+signs CHECKSUMS.md5.
+Publish metadata and signatures together with distinct modification times for
+successive publications so native clients refresh their caches.
+
+`nix flake check -L --max-jobs 2` exercises actual upstream pkgtools, slackpkg,
+slapt-get, sbopkg and Netpkg in isolated NixOS VMs. See
+[testing](docs/development/testing.md) for coverage and remaining limitations.

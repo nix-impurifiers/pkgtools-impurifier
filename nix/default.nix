@@ -182,6 +182,27 @@ let
       '';
       postInstall = "/usr/sbin/pkgtools-impurifier-activate";
     };
+  makeRepository =
+    {
+      packages,
+      timestamp ? sourceInfo.lastModified or 0,
+    }:
+    pkgs.runCommand "pkgtools-impurifier-repository"
+      {
+        nativeBuildInputs = [
+          pkgs.python3
+          pkgs.gnutar
+          pkgs.xz
+        ];
+        __structuredAttrs = true;
+        unsafeDiscardReferences.out = true;
+        packageList = pkgs.writeText "repository-packages.json" (
+          builtins.toJSON (map (package: "${package}/${package.filename}") packages)
+        );
+      }
+      ''
+        python3 ${./repository.py} "$packageList" "$out" ${toString timestamp} ${./sign-repository.sh}
+      '';
   makeSlackBuild =
     { package }:
     pkgs.runCommand "${package.name}-SlackBuild"
@@ -202,11 +223,39 @@ let
         OUTPUT="$(CDPATH= cd -- "$OUTPUT" && pwd)"
         PKG="$(mktemp -d "''${TMPDIR:-/tmp}/impurifier-pkg.XXXXXXXX")"
         trap 'rm -rf "$PKG"' EXIT HUP INT TERM
+        test "$(sha256sum "$CWD/payload.txz" | cut -d' ' -f1)" = @payloadHash@
         tar -xJf "$CWD/payload.txz" -C "$PKG"
         cd "$PKG"
         /sbin/makepkg -l n -c n "$OUTPUT/${package.filename}"
         SCRIPT
+        payloadHash=$(sha256sum "$out/payload.txz" | cut -d' ' -f1)
+        substituteInPlace $out/impurifier.SlackBuild --replace-fail @payloadHash@ "$payloadHash"
         chmod 755 $out/impurifier.SlackBuild
+        metadata=${lib.escapeShellArg package.filename}
+        metadata="''${metadata%.txz}"
+        metadata="''${metadata%-*}"
+        metadata="''${metadata%-*}"
+        version="''${metadata##*-}"
+        name="''${metadata%-*}"
+        requires=""
+        if tar -tJf "$out/payload.txz" | grep -x install/slack-required >/dev/null; then
+          requires=$(tar -xJOf "$out/payload.txz" install/slack-required | awk '{print $1}' | xargs)
+        fi
+        cp $out/impurifier.SlackBuild "$out/$name.SlackBuild"
+        tar -xJOf "$out/payload.txz" install/slack-desc > "$out/slack-desc"
+        printf 'Prebuilt Nix closure repacked with native Slackware makepkg.\n' > "$out/README"
+        cat > "$out/$name.info" <<INFO
+        PRGNAM="$name"
+        VERSION="$version"
+        HOMEPAGE="https://github.com/nix-impurifiers/pkgtools-impurifier"
+        DOWNLOAD=""
+        MD5SUM=""
+        DOWNLOAD_x86_64=""
+        MD5SUM_x86_64=""
+        REQUIRES="$requires"
+        MAINTAINER="Nix Impurifiers"
+        EMAIL=""
+        INFO
       '';
 in
 {
@@ -221,6 +270,7 @@ in
     makePackage
     makeRuntimePackage
     makeSlackBuild
+    makeRepository
     ;
   runtimePackage = makeRuntimePackage { };
   makeNetPackage = args: makePackage (args // { offline = false; });

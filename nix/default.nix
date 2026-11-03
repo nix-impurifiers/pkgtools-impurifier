@@ -48,6 +48,7 @@ let
       description ? "Impurified Nix application",
       configPaths ? [ ],
       postInstall ? "",
+      hostActivation ? true,
       postRemove ? "",
       dependencies ? [ ],
     }:
@@ -94,7 +95,7 @@ let
         #!/bin/sh
         # SPDX-License-Identifier: MIT
         set -eu
-        ${guard}
+        ${lib.optionalString hostActivation guard}
         config() {
           new="$1"
           old="''${new%.new}"
@@ -113,7 +114,7 @@ let
         #!/bin/sh
         # SPDX-License-Identifier: MIT
         set -eu
-        ${guard}
+        ${lib.optionalString hostActivation guard}
         # upgradepkg removes the old native inventory before its final install
         # pass processes .new files and activates the replacement.
         case "$0" in *-upgraded-????-??-??,??:??:??) exit 0 ;; esac
@@ -162,19 +163,19 @@ let
     };
   makeRuntimePackage =
     {
-      nixDependency ? "nix",
+      bundledNixStore ? null,
+      bundledNixNotices ? [ ],
+      nixDependency ? (if bundledNixStore == null then "nix" else null),
       pythonDependency ? "python3",
     }:
     buildPackage {
       name = "pkgtools-impurifier";
       version = core.runtimeVersion;
-      dependencies = [
-        nixDependency
-        pythonDependency
-      ];
+      dependencies = lib.optional (nixDependency != null) nixDependency ++ [ pythonDependency ];
+      architecture = if bundledNixStore == null then "noarch" else architecture;
       payload = pkgs.runCommand "pkgtools-impurifier-runtime-payload" { } ''
         mkdir -p $out
-        cp -r ${core.makeRuntimeTree { }}/. $out/
+        cp -r ${core.makeRuntimeTree { inherit bundledNixStore bundledNixNotices; }}/. $out/
         chmod -R u+w $out
         install -Dm755 ${activate} $out/usr/sbin/pkgtools-impurifier-activate
         mkdir -p $out/usr/share/pkgtools-impurifier
@@ -272,6 +273,15 @@ in
     makeSlackBuild
     makeRepository
     ;
+  makeNativePackage =
+    args:
+    buildPackage (
+      args
+      // {
+        architecture = args.architecture or architecture;
+        hostActivation = false;
+      }
+    );
   runtimePackage = makeRuntimePackage { };
   makeNetPackage = args: makePackage (args // { offline = false; });
   makeOfflinePackage = args: makePackage (args // { offline = true; });

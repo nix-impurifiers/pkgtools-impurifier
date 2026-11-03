@@ -24,3 +24,8 @@ fetching, Netpkg's remote dependency database and extra architectures remain
 additional compatibility coverage. sbopkg has no removal operation; native
 pkgtools handles removal of its built packages. Netpkg local installation uses
 its native confirmation prompt. Nix provisioning remains deferred installer work.
+
+Additional native-payload VM coverage installs, executes, upgrades and removes
+a producer-prepared static payload in a target root without `/nix`. A separate
+bundled-client variant repeats the original lifecycle suite with actual static
+Nix and an incompatible external candidate.

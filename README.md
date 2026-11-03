@@ -63,3 +63,21 @@ successive publications so native clients refresh their caches.
 `nix flake check -L --max-jobs 2` exercises actual upstream pkgtools, slackpkg,
 slapt-get, sbopkg and Netpkg in isolated NixOS VMs. See
 [testing](docs/development/testing.md) for coverage and remaining limitations.
+
+## Native payloads and bundled Nix
+
+`makeNativePackage { name; version; payload; architecture?; configPaths?; ... }`
+accepts a producer-prepared filesystem tree. It adds no engine dependency or
+activation callbacks. Native `.new` configuration handling remains available,
+including installation into a foreign root. The producer supplies a working
+target layout; binaries are not relocated. Dependency metadata is advisory, as
+with ordinary pkgtools archives. The native VM executes a static payload in a
+root without `/nix`, upgrades it and removes it with upstream pkgtools.
+
+`makeRuntimePackage` accepts `bundledNixStore` and `bundledNixNotices` for a static
+ELF client and upstream notices. Bundling drops the default native Nix requirement
+and uses a machine architecture; Python remains required. Compatible external
+clients take precedence, explicit `IMPURIFIER_NIX_STORE` disables fallback, and
+a failed mutation is never retried through another client. A bundled-client VM
+repeats the lifecycle suite with an incompatible external candidate. Bundling is
+not a Nix provider/installer.
